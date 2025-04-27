@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unemployment & Population</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Data & Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; }
+    .chart-container { height: 400px; }
+    .card-chart { width: 100%; height: 100%; }
+    .form-select { max-width: 300px; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Unemployment & Population</a>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="container my-4">
+    <!-- Controls Row -->
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label for="state-select" class="form-label">State</label>
+        <select id="state-select" class="form-select"></select>
+      </div>
+      <div class="col-md-3">
+        <label for="pop-year-select" class="form-label">Population Year</label>
+        <select id="pop-year-select" class="form-select"></select>
+      </div>
+      <div class="col-md-3">
+        <label for="unemp-year-select" class="form-label">Unemployment Year</label>
+        <select id="unemp-year-select" class="form-select"></select>
+      </div>
+      <div class="col-md-3">
+        <label for="trend-state-select" class="form-label">Trend State</label>
+        <select id="trend-state-select" class="form-select"></select>
+      </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">Population Distribution by Year</div>
+          <div class="card-body chart-container">
+            <div id="piechart" class="card-chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">Population by State</div>
+          <div class="card-body chart-container">
+            <div id="barPopulation" class="card-chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">Top 20 States by Unemployment Rate</div>
+          <div class="card-body chart-container">
+            <div id="barUnemployment" class="card-chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">Heat Map of Unemployment Rates</div>
+          <div class="card-body chart-container">
+            <div id="regions_div" class="card-chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">Population Trend Over Time</div>
+          <div class="card-body chart-container">
+            <div id="trendChart" class="card-chart"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Chart Initialization -->
+  <script>
+    google.charts.load('current', { packages: ['corechart', 'geochart'] });
+    google.charts.setOnLoadCallback(init);
+
+    function init() {
+      Papa.parse('https://raw.githubusercontent.com/sumbul-t/my-data/15ee5f4c1b9a40e62ad301578715db2ab8d502bd/unemployment-population.csv', {
+        header: true,
+        download: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: results => setupCharts(results.data)
+      });
+    }
+
+    function setupCharts(data) {
+      const years = [...new Set(data.map(d => d.year))].sort();
+      const states = [...new Set(data.map(d => d.state).filter(Boolean))].sort();
+      const lastYear = years[years.length - 1];
+
+      const stateSel = document.getElementById('state-select');
+      const popYearSel = document.getElementById('pop-year-select');
+      const unempYearSel = document.getElementById('unemp-year-select');
+      const trendStateSel = document.getElementById('trend-state-select');
+
+      states.forEach(s => {
+        stateSel.add(new Option(s, s));
+        trendStateSel.add(new Option(s, s));
+      });
+      years.forEach(y => {
+        popYearSel.add(new Option(y, y));
+        unempYearSel.add(new Option(y, y));
+      });
+
+      stateSel.onchange = () => drawPie(data, stateSel.value);
+      popYearSel.onchange = () => drawBarPopulation(data, +popYearSel.value);
+      unempYearSel.onchange = () => drawBarUnemployment(data, +unempYearSel.value);
+      trendStateSel.onchange = () => drawTrend(data, trendStateSel.value);
+
+      stateSel.value = states[0];
+      popYearSel.value = lastYear;
+      unempYearSel.value = lastYear;
+      trendStateSel.value = states[0];
+
+      drawPie(data, states[0]);
+      drawBarPopulation(data, lastYear);
+      drawBarUnemployment(data, lastYear);
+      drawGeo(data);
+      drawTrend(data, states[0]);
+    }
+
+    function drawPie(data, state) {
+      const rows = [['Year', 'Population'],
+        ...data
+          .filter(d => d.state === state)
+          .map(d => [ String(d.year), d.population ])
+      ];
+      const options = { pieHole: 0.4, legend: 'right' };
+      const chart = new google.visualization.PieChart(document.getElementById('piechart'));
+      chart.draw(google.visualization.arrayToDataTable(rows), options);
+    }
+
+    function drawBarPopulation(data, year) {
+      const rows = [['State', 'Population'],
+        ...data.filter(d => d.year === year).sort((a, b) => b.population - a.population).map(d => [d.state, d.population])
+      ];
+      const options = { legend: 'none', hAxis: { title: 'Population' }, orientation: 'horizontal' };
+      const chart = new google.visualization.BarChart(document.getElementById('barPopulation'));
+      chart.draw(google.visualization.arrayToDataTable(rows), options);
+    }
+
+    function drawBarUnemployment(data, year) {
+      const rate = d => d.unemployment_rate || d['unemployment rates'];
+      const rows = [['State', 'Unemployment Rate'],
+        ...data.filter(d => d.year === year)
+          .sort((a, b) => rate(b) - rate(a))
+          .slice(0, 20)
+          .map(d => [d.state, rate(d)])
+      ];
+      const options = { legend: 'none', hAxis: { title: 'Rate (%)' }, orientation: 'horizontal' };
+      const chart = new google.visualization.BarChart(document.getElementById('barUnemployment'));
+      chart.draw(google.visualization.arrayToDataTable(rows), options);
+    }
+
+    function drawGeo(data) {
+      const rate = d => d.unemployment_rate || d['unemployment rates'];
+      const latest = Math.max(...data.map(d => d.year));
+      const rows = [['State', 'Unemployment Rate'],
+        ...data.filter(d => d.year === latest).map(d => [d.state, rate(d)])
+      ];
+      const options = { region: 'US', displayMode: 'regions', resolution: 'provinces' };
+      const chart = new google.visualization.GeoChart(document.getElementById('regions_div'));
+      chart.draw(google.visualization.arrayToDataTable(rows), options);
+    }
+
+    function drawTrend(data, state) {
+      const rows = [['Year', 'Population'],
+        ...data.filter(d => d.state === state).sort((a, b) => a.year - b.year).map(d => [d.year, d.population])
+      ];
+      const options = { curveType: 'function', legend: 'none', hAxis: { title: 'Year' }, vAxis: { title: 'Population' } };
+      const chart = new google.visualization.LineChart(document.getElementById('trendChart'));
+      chart.draw(google.visualization.arrayToDataTable(rows), options);
+    }
+  </script>
+</body>
+</html>
